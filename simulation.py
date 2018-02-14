@@ -8,6 +8,8 @@ Created on Wed Feb 14 04:50:44 2018
 
 
 from vpython import *
+from PID import PID
+
 scene.title = "Fuzzy Logic Simulation"
 scene.width = 1300
 scene.height = 900
@@ -49,6 +51,7 @@ g = 9.81
 cart.mass = 5 # 5kg
 cart.v = vector(0,0,0) # Initial cart velocity = 0 m/s
 accel = vector(0,0,0) # Acceleration vector of cart
+cart.dist = 0
 
 # cart physics properties
 cart_accel_vector = arrow(pos=vector(0,0,0),axis=platform.axis.norm(), shaftwidth=0.01)
@@ -59,10 +62,26 @@ sensor_reading_label = label( pos=vec(0, 0.4, 0), text='Sensor = +0 m' )
 
 simulation_running = True
 
+# PID controller test
+pid = PID(0.02, 0.0, 0.0)
+pid.setSampleTime(1/frame_rate)
+pid.SetPoint = 0.5 # Set setpoint to 0.5m
+max_pid_output = d_theta
+min_pid_output = -d_theta
+
+def capPidOutput(current_output):
+    if current_output >= max_pid_output:
+        return max_pid_output
+    
+    if current_output <= min_pid_output:
+        return min_pid_output
+    
+    return current_output
 
 def showLabels():
     time_label.text = "Time elapsed: {:.2f} sec".format(t)
     platform_angle_label.text = "Theta = {:.2f} deg".format(degrees(theta))
+    sensor_reading_label.text = "Sensor = {:.2f} m".format(cart.dist)
 
 def rotatePlane():
      platform.rotate(angle = d_theta, origin = vector(0,0,0), axis = vector(0,0,1))
@@ -72,36 +91,46 @@ def rotatePlane():
      
      
 def computeForces():
-     accel  = norm(platform.axis) * -1
-     accel.mag = g * sin(theta) 
-     cart.v += accel * delta_t
-     if accel.x < 0:
-         if cart.pos.x <= (-platform_length/2)*cos(theta):
-             cart.v = vector(0,0,0)
-             #cart.pos.y = (-cart.pos.x)*sin(theta) + cart_width
-         else:
+    global theta
+    pid.update(cart.dist)
+    testTheta = capPidOutput(pid.output)
+    #theta = -testTheta
+    theta += d_theta
+    accel  = norm(platform.axis) * -1
+    accel.mag = g * sin(theta) 
+    cart.v += accel * delta_t
+    if accel.x < 0:
+        if cart.pos.x <= (-platform_length/2)*cos(theta):
+            cart.v = vector(0,0,0)
+            #cart.pos.y = (-cart.pos.x)*sin(theta) + cart_width
+        else:
             cart.pos += cart.v * delta_t
             
             
-     if accel.x > 0:
+    if accel.x > 0:
         if cart.pos.x >= (platform_length/2)*cos(theta)-0.05:
             cart.v = vector(0,0,0)
             #cart.pos.y = (-cart.pos.x)*sin(theta) + cart_width
             
         else:
             cart.pos += cart.v * delta_t
-     cart.pos.y = cart.pos.x * sin(theta) + cart_width
-            
-     print(cart.pos)
+    cart.pos.y = cart.pos.x * sin(theta) + cart_width
+    cart.dist = cart.pos.mag
+    if cart.pos.x < 0:
+        cart.dist *= -1
+     #d_theta = testTheta
+    
+    print(d_theta, testTheta)
+    
      
-
+theta = 0
 while simulation_running:
     rate(frame_rate)
+    #theta += d_theta
     rotatePlane()
     computeForces()
     showLabels()
     
-    theta += d_theta
     
     if theta < -radians(max_platform_angle):
         d_theta *= -1
