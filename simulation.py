@@ -5,7 +5,8 @@ Created on Wed Feb 14 04:50:44 2018
 
 @author: boatengyeboah
 """
-
+import sys
+sys.path.append("/Library/Frameworks/Python.framework/Versions/3.6/lib/python3.6/site-packages")
 
 from vpython import *
 from PID import PID
@@ -21,7 +22,7 @@ t = 0
 
 
 # Testing platform rotation
-max_platform_angle = 10
+max_platform_angle = 45
 max_platform_angle_time = 4
 d_theta = (max_platform_angle/max_platform_angle_time)/frame_rate
 d_theta = radians(d_theta)
@@ -63,12 +64,17 @@ sensor_reading_label = label( pos=vec(0, 0.4, 0), text='Sensor = +0 m' )
 simulation_running = True
 
 # PID controller test
-pid = PID(0.02, 0.0, 0.0)
+pid = PID(0.07, 0.01, 0.0)
 pid.setSampleTime(1/frame_rate)
-pid.SetPoint = 0.5 # Set setpoint to 0.5m
-max_pid_output = d_theta
-min_pid_output = -d_theta
+pid.SetPoint = 0.3 # Set setpoint to 0.5m
+max_pid_output = radians(30)
+min_pid_output = -radians(30)
 
+
+prev_theta = 0
+
+hitLeft = False
+hitRight = False
 def capPidOutput(current_output):
     if current_output >= max_pid_output:
         return max_pid_output
@@ -77,6 +83,8 @@ def capPidOutput(current_output):
         return min_pid_output
     
     return current_output
+
+
 
 def showLabels():
     time_label.text = "Time elapsed: {:.2f} sec".format(t)
@@ -92,52 +100,61 @@ def rotatePlane():
      
 def computeForces():
     global theta
+    global d_theta, hitLeft, hitRight
     pid.update(cart.dist)
-    testTheta = capPidOutput(pid.output)
+   
+    prev_theta = theta
+    theta = capPidOutput(-pid.output)
+    d_theta = theta - prev_theta
+    #print("Current = {:.2f}, Error = {:.2f},Theta={}, Prev={}, dTheta={}".format(cart.dist, pid.SetPoint-cart.dist, degrees(theta),degrees(prev_theta), degrees(d_theta)))
     #theta = -testTheta
-    theta += d_theta
+    #theta += d_theta
     accel  = norm(platform.axis) * -1
     accel.mag = g * sin(theta) 
+    print("Cart dist= {}, Accel={}".format(cart.dist, accel))
     cart.v += accel * delta_t
-    if accel.x < 0:
-        if cart.pos.x <= (-platform_length/2)*cos(theta):
-            cart.v = vector(0,0,0)
+    if cart.pos.x <= (-platform_length/2)*cos(theta) and not hitLeft:
+        hitLeft = True
+        cart.v *= -1
+    elif cart.pos.x > (-platform_length/2)*cos(theta):
+        hitLeft = False
+            
+            
+    if cart.pos.x >= (platform_length/2)*cos(theta)-0.05 and not hitRight:
+        hitRight = True
+        print("Inside positive")
+        cart.v *= -1
+    elif cart.pos.x < (platform_length/2)*cos(theta)-0.05:
+        hitRight = False
             #cart.pos.y = (-cart.pos.x)*sin(theta) + cart_width
-        else:
-            cart.pos += cart.v * delta_t
             
-            
-    if accel.x > 0:
-        if cart.pos.x >= (platform_length/2)*cos(theta)-0.05:
-            cart.v = vector(0,0,0)
-            #cart.pos.y = (-cart.pos.x)*sin(theta) + cart_width
-            
-        else:
-            cart.pos += cart.v * delta_t
-    cart.pos.y = cart.pos.x * sin(theta) + cart_width
+    cart.pos += cart.v * delta_t
+    cart.pos.y = cart.pos.x * sin(theta)# + cart_width
     cart.dist = cart.pos.mag
+    
     if cart.pos.x < 0:
         cart.dist *= -1
+    #print("Cart x = {:.2f}, Accel ={}".format(cart.pos.x, accel))
      #d_theta = testTheta
     
-    print(d_theta, testTheta)
+    
     
      
 theta = 0
-while simulation_running:
-    rate(frame_rate)
-    #theta += d_theta
-    rotatePlane()
-    computeForces()
-    showLabels()
+with open('plot.csv', 'w') as f:
+    while simulation_running:
+        rate(frame_rate)
+        #theta += d_theta
+        computeForces()
+        rotatePlane()
+        showLabels()
+        #f.write("{},{},{}\n".format(cart.dist, pid.SetPoint-cart.dist, t))       
+        if theta < -radians(max_platform_angle):
+            d_theta *= -1
     
-    
-    if theta < -radians(max_platform_angle):
-        d_theta *= -1
-
-    if theta > radians(max_platform_angle):
-        d_theta *= -1
-    t += delta_t
+        if theta > radians(max_platform_angle):
+            d_theta *= -1
+        t += delta_t
     
     
     
