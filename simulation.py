@@ -1,110 +1,123 @@
-from __future__ import division
-from visual import *
-scene.title = "Fuzzy Neuro Network"
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Feb 14 04:50:44 2018
 
-scene.background = color.black
-scene.center = (0, 1, 0) # location at which the camera looks
-scene.width = 1000
-scene.height = 1000
-maxAngle = 10
-maxAngleTime = 3
-frameRate = 30
-dTheta = ((maxAngle/maxAngleTime)/frameRate) * (pi / 180.0)
+@author: boatengyeboah
+"""
 
-# Define scene objects (units are in meters)
 
-# 1.4-m long inclined plane whose center is at 0.7 m
-planeLength = 2 # 2m
-inclinedPlane = box(pos = vector(0, 0, 0), size = (planeLength, 0.02, 0.2),
-color = color.green, opacity = 0.3)
-# 20-cm long cart on the inclined plane
-cartLength = 0.2
-cart = box(size = (cartLength, 0.06, 0.06), color = color.blue)
-# Define parameters
-cart.m = 5 # mass of cart in kg
+from vpython import *
+scene.title = "Fuzzy Logic Simulation"
+scene.width = 1300
+scene.height = 900
 
-# initial position of the cart in(x, y, z) form, units are in meters
-#   cart is positioned on the inclined plane at the far left end
-cart.pos = vector(0, 0.04, 0.08)
+# Define simulation parameters
+frame_rate = 20
+delta_t = 1/frame_rate 
+t = 0
 
-cart.v = vector(0, 0, 0) # initial velocity of car in (vx, vy, vz) form, units are m/s
 
-# angle of inclined plane relative to the horizontal
+# Testing platform rotation
+max_platform_angle = 10
+max_platform_angle_time = 4
+d_theta = (max_platform_angle/max_platform_angle_time)/frame_rate
+d_theta = radians(d_theta)
 theta = 0
 
-# rotate the cart and the inclined plane based on the specified angle (counterclockwise)
-inclinedPlane.rotate(angle = 0, origin = inclinedPlane.pos, axis = (0,0,1))
-cart.rotate(angle = theta, origin = (0, 0, 0), axis = (0,0,1))
+# Define Scene Objects
+platform_length = 2 # 2m
+platform_width = 0.02
+platform_height = 0.2
+platform = box(pos=vector(0,0,0), size=vector(platform_length, platform_width, platform_height), color=vector(255, 0, 0))
+# plaform base
+plaform_base = box(pos=vector(0,-0.25, 0), size=vector(0.02, 0.5, 0.02), color=vector(139, 0, 0))
 
-# set the initial velocity up the ramp; units are m/s
-cart.v = norm(inclinedPlane.axis)
-cart.v.mag = 0
+# Stop block right and left
+stop_block_width = 0.1
+stop_block_length = 0.1
+stop_block_right = box(pos=vector((platform_length/2)+(stop_block_width),0,0), size=vector(stop_block_length,stop_block_width, stop_block_width))
+stop_block_left = box(pos=vector((-platform_length/2)-(stop_block_width),0,0), size=vector(stop_block_length,stop_block_width, stop_block_width))
+# Cart 
+cart_length = 0.2
+cart_width = 0.02
+cart_height = 0.2
+cart = box(pos=vector(0,platform_width,0), size=vector(cart_length, cart_width, cart_height))
 
-g = 9.8 # acceleration due to gravity; units are m/s/s
+# Define physics parameters
+g = 9.81
+cart.mass = 5 # 5kg
+cart.v = vector(0,0,0) # Initial cart velocity = 0 m/s
+accel = vector(0,0,0) # Acceleration vector of cart
 
-mu = 2e-4# coefficient of friction between cart and plane
+# cart physics properties
+cart_accel_vector = arrow(pos=vector(0,0,0),axis=platform.axis.norm(), shaftwidth=0.01)
+# Time label
+time_label = label( pos=vec(0, 0.5, 0), text='Time = 0 sec' )
+platform_angle_label = label( pos=vec(0, 0.45, 0), text='Theta = 0 deg' )
+sensor_reading_label = label( pos=vec(0, 0.4, 0), text='Sensor = +0 m' )
 
-# Define time parameters
-t = 0 # starting time
-deltat = 1/frameRate  # time step units are s
+simulation_running = True
 
 
-### CALCULATION LOOP; perform physics updates and drawing
-# ------------------------------------------------------------------------------------
+def showLabels():
+    time_label.text = "Time elapsed: {:.2f} sec".format(t)
+    platform_angle_label.text = "Theta = {:.2f} deg".format(degrees(theta))
 
-#pointer = arrow(pos=(0,0,0),axis=inclinedPlane.axis.norm(), shaftwidth=0.1)
-angle = 0
-
-fNetDir= arrow(pos=(0,0,0),axis=(0,0,1), shaftwidth=0.01)
-
-f = open("points.csv", 'w')
-
-accel = vector(0,0,0)
-flag = 0
-with open("points.csv", 'w') as f:
-    while True:  # while the cart's y-position is greater than 0 (above the ground)
-        rate(frameRate)    
-    
-        inclinedPlane.rotate(angle = dTheta, origin = (0,0,0), axis = (0,0,1))
-
-        # Compute Net Force 
-
-        Fnet = norm(inclinedPlane.axis)
-        # set the magnitude to the component of the gravitational force parallel to the inclined plane
-        Fnet.mag = -(cart.m * g * sin(theta)) #- (mu * cart.m * g * cos(theta))
-
-        
-        accel  = norm(inclinedPlane.axis) * -1
-        accel.mag = g * sin(theta) 
-
-        if theta > 0:
-            accel.mag += mu * g * cos(theta)
-        else:
-            accel.mag -= mu * g * cos(theta)
-        
-        fNetDir.axis = Fnet.norm()
-        cart.v = cart.v + (accel* deltat) 
-    
-        print("Accel = {}, Pos = {}, planeX={}".format(accel, cart.pos, (planeLength/2)*cos(theta)))
-        
-        if accel.x < 0:
-            if cart.pos.x <= (-planeLength/2)*cos(theta):
-                cart.v = vector(0,0,0)
-                #cart.rotate(angle = dTheta, origin = (0,0,0), axis = (0,0,1))
+def rotatePlane():
+     platform.rotate(angle = d_theta, origin = vector(0,0,0), axis = vector(0,0,1))
+     stop_block_right.rotate(angle = d_theta, origin = vector(0,0,0), axis = vector(0,0,1))
+     stop_block_left.rotate(angle = d_theta, origin = vector(0,0,0), axis = vector(0,0,1))
+     cart.rotate(angle = d_theta, origin = vector(0,0,0), axis = vector(0,0,1))
+     
+     
+def computeForces():
+     accel  = norm(platform.axis) * -1
+     accel.mag = g * sin(theta) 
+     cart.v += accel * delta_t
+     if accel.x < 0:
+         if cart.pos.x <= (-platform_length/2)*cos(theta):
+             cart.v = vector(0,0,0)
+             #cart.pos.y = (-cart.pos.x)*sin(theta) + cart_width
+         else:
+            cart.pos += cart.v * delta_t
             
+            
+     if accel.x > 0:
+        if cart.pos.x >= (platform_length/2)*cos(theta)-0.05:
+            cart.v = vector(0,0,0)
+            #cart.pos.y = (-cart.pos.x)*sin(theta) + cart_width
+            
+        else:
+            cart.pos += cart.v * delta_t
+     cart.pos.y = cart.pos.x * sin(theta) + cart_width
+            
+     print(cart.pos)
+     
 
-        if accel.x > 0:
-            if cart.pos.x >= (planeLength/2)*cos(theta)-0.05:
-                cart.v = vector(0,0,0)
-                #cart.rotate(angle = dTheta, origin = (0,0,0), axis = (0,0,1))
-                
-        if (theta < -maxAngle* (pi / 180.0)):
-            dTheta *= -1
+while simulation_running:
+    rate(frame_rate)
+    rotatePlane()
+    computeForces()
+    showLabels()
+    
+    theta += d_theta
+    
+    if theta < -radians(max_platform_angle):
+        d_theta *= -1
 
-        if theta > maxAngle* (pi / 180.0):
-            print("Inside theta")
-            dTheta *= -1
-
-        cart.pos = cart.pos + cart.v * deltat
-        theta += dTheta
-        t = t + deltat     
+    if theta > radians(max_platform_angle):
+        d_theta *= -1
+    t += delta_t
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
